@@ -23,7 +23,7 @@ cd legend_of_zelda
 * 'Q' Quit
 
 ### Features
-* Build map using edit mode
+* Build map using edit mode and JSON
 * Collision detection
 
 ## javascript_link
