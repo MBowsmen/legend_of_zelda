@@ -1,3 +1,0 @@
-http://gcctech.org/csc/javascript/keycodeExample.html
-
-http://gcctech.org/csc/javascript/javascript_keycodes.htm
