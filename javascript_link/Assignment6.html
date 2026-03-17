@@ -1,0 +1,823 @@
+<!-- 
+NAME: MICHAEL MONTANA BOWMAN
+DATE: 11.24.25
+ID: 100467883 
+-->
+
+<head>
+	<title>Assignment6</title>
+	<meta charset="UTF-8">
+
+
+	<style>
+		body {
+			font-family: sans-serif;
+			text-align: center;
+			padding: 20px;
+		}
+		#dropZone {
+			width: 600px;
+			height: 150px;
+			border: 2px dashed #888;
+			margin: 20px auto;
+			line-height: 150px;
+			color: #888;
+			font-size: 20px;
+			border-radius: 10px;
+			user-select: none;
+		}
+		#dropZone.hover {
+			border-color: #333;
+			color: #333;
+		}
+		canvas {
+			display: block;
+			margin: 20px auto;
+			border: 1px solid black;
+		}
+	</style>
+</head>
+<body>
+
+<br>
+<canvas id="myCanvas" width="700" height="500" style="border:1px solid #cccccc;"></canvas>
+<br>
+
+<h2>Drag your map JSON file here</h2>
+<div id="dropZone">Drop map file here</div>
+
+<script type="text/javascript">
+
+
+//global canvas size variables
+WINDOW_WIDTH = 700 
+WINDOW_HEIGHT = 500
+
+class Sprite
+{
+	constructor(x1, y1, w1, h1, image_url)
+	{
+		//all sprite location and dimension variables 
+		this.x = x1
+		this.y = y1
+		this.w = w1
+		this.h = h1
+
+		//previous location save variables 
+		this.px = x1
+		this.py = y1
+		
+		//create new image variable with img src
+		this.image = new Image()
+		this.image.src = image_url
+
+		//update if sprite needs to be deleted 
+		this.isValid = true
+	}
+
+	update() 
+	{
+		//by default don't delete
+		return this.isValid
+	}
+
+	//each sprite draws itself 
+	drawYourself(g, currentRoomX, currentRoomY) 
+	{
+		g.drawImage(this.image, this.x-currentRoomX, this.y-currentRoomY, this.w, this.h)
+	}
+	
+	//if sprite is a certain object identify
+	isLink() 
+	{
+		return false
+	}
+
+	isChest() 
+	{
+		return false
+	}
+
+	isTree()
+	{
+		return false 
+	}
+
+	isBoomerang() 
+	{
+		return false 
+	}
+}
+
+class Tree extends Sprite
+{
+	constructor(x, y, w, h, image_url)
+	{
+		super(x, y, w, h, image_url)
+	}
+	
+	update()
+	{
+		//trees never delete 
+		return this.isValid
+	}
+
+	//no collision resolution for trees
+	collisionResolution()
+	{
+		
+	}
+
+	isTree()
+	{
+		return true 
+	}
+}
+
+class Chest extends Sprite
+{
+	constructor(x, y, w, h, image_url)
+	{
+		super(x, y, w, h, image_url)
+
+		//despawn rupee if left alone for after 150 frames
+		this.depsawnTimer = 150
+
+		//activate timer if collided as a chest
+		this.activateDespawnTimer = false
+
+		//despawns rupee if true
+		this.despawnRupee = false; 
+
+		//if collided with twice set to true (for rupee collisions)
+		this.secondCollision = false; 
+
+		//rupee stays on screen for 15 frames no matter what
+		this.freezeFrames = 135; 
+	}
+	
+	update() 
+	{
+		//if despawn timer is active decrease each frame
+		 if(this.activateDespawnTimer)
+            this.depsawnTimer--; //decrease
+        
+		//if despawn timer ever reaches zero or a different method sets despawn rupee to true delete rupee from sprites 
+        if(this.depsawnTimer == 0 || this.despawnRupee) 
+            return this.isValid = false; 
+
+		//all else keep rupee on screen
+        return this.isValid = true; 
+    }
+
+	collisionResolution()
+	{
+		//on first collide set image to rupee and activate despawn timer
+		this.image.src = "images/rupee.png"; 
+		this.activateDespawnTimer = true; 
+
+		//if despawn timer is on (chest === rupee) and the despwan timer is less than total freeze frames
+        if(this.activateDespawnTimer && (this.depsawnTimer < this.freezeFrames))
+		{
+			//despawn sprite 
+            this.despawnRupee = true 
+
+			//set second collision to true adding a collected rupee 
+			this.secondCollision = true
+		}
+	}
+
+	isChest() 
+	{
+		return true 
+	}
+
+	isRupee() 
+	{
+		//if the despawn timer is one (chest === rupee) and its the second collision return true 
+		if(this.activateDespawnTimer && this.secondCollision)
+			return true
+
+		//eles return false
+		return false
+	}
+}
+
+class Boomerang extends Sprite
+{
+	constructor(x, y, w, h, image_url, direction)
+	{
+		super(x, y, w, h, image_url)
+		
+		//boomerang speed is equal to 7
+		this.speed = 7
+
+		//allows boomerang to travel from link in certain direction
+		this.direction = direction
+
+		//create image array
+		this.images = [] 
+		this.MAX_IMAGES_PER_DIRECTION = 1
+		this.TOTAL_NUM_IMAGES = 4
+		this.NUM_DIRECTIONS = 4
+
+		//animation variables 
+		this.frameNum = 0
+		this.rotateFrames = 0 
+
+		//index for images 
+		let index = 1
+
+		//load images into image array
+		for(let i = 0; i < this.NUM_DIRECTIONS; i++) 
+		{
+			this.images[i] = []
+			for(let j = 0; j < this.MAX_IMAGES_PER_DIRECTION; j++)
+			{
+				this.images[i].push(new Image())
+				this.images[i][j].src = "images/boomerang" + (index++) + ".png" 
+			}
+		}
+	}
+	
+	update() 
+	{
+		
+		//cycle through animation frames
+		if(++this.rotateFrames >= 4)
+			this.rotateFrames = 0
+
+		//move boomerang
+		//left
+		if(this.direction == 1)
+			this.x -= this.speed 
+
+		//right
+		else if(this.direction == 2)
+			this.x += this.speed
+
+		//down
+		if(this.direction == 0) 
+			this.y += this.speed
+
+		//up
+		else if(this.direction == 3) 
+			this.y -= this.speed
+
+		//delete?
+		return this.isValid
+	}
+
+	drawYourself(g, currentRoomX, currentRoomY)
+	{	
+		//draw yourself using certain frame
+		g.drawImage(this.images[this.rotateFrames][this.frameNum], this.x-currentRoomX, this.y-currentRoomY, this.w, this.h)
+	}
+
+	collisionResolution(spriteB)
+	{	
+		//if colliding with anything that isnt link
+		if(!spriteB.isLink())
+			this.isValid = false //delete
+	}
+
+	isBoomerang()
+	{
+		return true
+	}
+}
+
+
+
+class Link extends Sprite
+{
+	constructor(x, y, w, h, image_url)
+	{
+		super(x, y, w, h, image_url)
+
+		//image array
+		this.images = [] 
+		this.MAX_IMAGES_PER_DIRECTION = 11 
+		this.TOTAL_NUM_IMAGES = 44
+		this.NUM_DIRECTIONS = 4
+
+		//frame variables 
+		this.frameNum = 0
+		this.direction = 0
+
+		///link speed
+		this.speed = 6
+
+		//image index for lodaing 
+		let index = 1
+
+		//load each image into image array 
+		for(let i = 0; i < this.NUM_DIRECTIONS; i++) 
+		{
+			this.images[i] = []
+			for(let j = 0; j < this.MAX_IMAGES_PER_DIRECTION; j++)
+			{
+				this.images[i].push(new Image())
+				this.images[i][j].src = "images/link" + (index++) + ".png" 
+			}
+		}
+	}
+
+	moveLink(dir)
+	{	
+		//move link function 
+		if(dir == "left")
+		{
+			this.x -= this.speed 
+			this.direction = 1 	
+		}
+		else if(dir == "right")
+		{
+			this.x += this.speed
+			this.direction = 2
+		}
+		if(dir == "down") 
+		{
+			this.y += this.speed
+			this.direction = 0 
+		}
+		else if(dir == "up") 
+		{
+			this.y -= this.speed
+			this.direction = 3 
+		}
+	}
+
+	update()
+	{
+		//cycle through frameNums 
+		if(++this.frameNum >= this.MAX_IMAGES_PER_DIRECTION)
+			this.frameNum = 0
+
+		return this.isValid
+	}
+
+	drawYourself(g, currentRoomX, currentRoomY)
+	{
+		g.drawImage(this.images[this.direction][this.frameNum], this.x-currentRoomX, this.y-currentRoomY, this.w, this.h)
+	}
+
+	//reset frame nums if link is standing still
+	resetFrameNum()
+	{
+		this.frameNum = 0
+	}
+
+    collisionResolution(spriteB)
+    {
+        /* 
+         * if
+         * links previous x position plus links width is less than or equal to the trees x position 
+         * and
+         * links current x position plus links width is greater than or equal to the trees x position
+         * links new current x position is the trees x position minus links width
+         */
+        if(this.px + this.w <= spriteB.x && this.x + this.w >= spriteB.x) 
+            this.x = spriteB.x - this.w; 
+
+        /*
+         * if 
+         * links previous x position is greater than or equal to the trees current x position plus the trees width 
+         * and
+         * links current x is less than or equal to the trees current x position plus the trees width 
+         * links new current x position is the trees x position plus the trees width 
+         */
+        else if(this.px >= spriteB.x + spriteB.w && this.x <= spriteB.x + spriteB.w) 
+            this.x = spriteB.x + spriteB.w; 
+
+        /* 
+         * if
+         * links previous y position plus links height is less than or equal to the trees y position 
+         * and
+         * links current y position plus links height is greater than or equal to the trees y position
+         * links new current y position is the trees y position minus links height
+         */
+        if(this.py + this.h <= spriteB.y && this.y + this.h >= spriteB.y)
+            this.y = spriteB.y - this.h; 
+        
+         /*
+         * if 
+         * links previous y position is greater than or equal to the trees current y position plus the trees height 
+         * and
+         * links current y is less than or equal to the trees current y position plus the trees height 
+         * links new current y position is the trees y position plus the trees height 
+         */
+        else if(this.py >= spriteB.y + spriteB.h && this.y <= spriteB.y + spriteB.h) 
+            this.y = spriteB.y + spriteB.h; 
+    }
+
+	//save previous position for collision resolution
+	savePreviousPosition()
+	{
+		this.px = this.x
+		this.py = this.y 
+	}
+
+	isLink() 
+	{
+		return true
+	}
+}
+
+
+
+
+class Model
+{
+	constructor()
+	{
+		//create sprite array to hold sprites 
+		this.sprites = [];
+
+		//spawn link
+		this.link = new Link(100, 100, 50, 50, "images/link1.png")
+
+		//add link to sprites array
+		this.sprites.push(this.link)
+
+		//keep track of total number of rupees collected 
+		this.totalNumberOfRupees = 0
+	}
+
+	update()
+	{	
+		//compare two sprites with nested for loops i and j 
+		for(let i = 0; i < this.sprites.length; i++)
+		{	
+			//update sprite before comparison to check if valid 
+			this.sprites[i].update()
+			let spriteA = this.sprites[i]
+
+			//if sprite is not valid 
+			if(!spriteA.update())
+			{
+				//if sprite is a rupee update totalNumberOfRupees before deleting 
+				if(spriteA.isChest() && spriteA.isRupee())
+					this.totalNumberOfRupees++ 
+
+				//delete sprite 
+				this.sprites.splice(i,1)
+			}
+
+			//second loop to compare second sprite 
+			for(let j = 0; j < this.sprites.length; j++)
+			{
+				let spriteB = this.sprites[j]
+
+				//if sprites are the same or if they are both trees skip collision
+				if((i == j) || (spriteA.isTree() && spriteB.isTree()))
+					continue 
+
+				//if collision is detected and the collision is between allowed sprites (collisionType)
+				if(this.collisionDetection(spriteA, spriteB) && this.collisionType(spriteA, spriteB))
+				{		
+					//activate collisionResolution for each sprite 
+					spriteA.collisionResolution(spriteB)
+					spriteB.collisionResolution(spriteA)
+				}
+			}
+		}
+	}
+
+	collisionType(a, b)
+	{
+		//Link vs Tree
+		if(a.isLink() && b.isTree() || 
+		   a.isTree() && b.isLink())
+			return true; 
+		
+		//Link vs TreasureChest
+		if(a.isLink() && b.isChest() || 
+		   a.isChest() && b.isLink())
+			return true; 
+		
+		//all boomerang interactions
+		if(a.isBoomerang() || b.isBoomerang())
+			return true; 
+
+		return false;
+	}
+
+	collisionDetection(spriteA, spriteB)	
+	{
+		//if sprite a current x is greater than the sprite b x plus its width there is no collision
+		if (spriteA.x >= spriteB.x + spriteB.w) 
+			return false; 
+		//if sprite a current x plus links width less than or equal to sprite b x there is no collision
+		if (spriteA.x + spriteA.w <= spriteB.x) 
+			return false; 
+		//if sprite a current y is greater than the sprite b y plus its height there is no collision
+		if (spriteA.y >= spriteB.y + spriteB.h) 
+			return false; 
+
+		//if sprite a current y plus links height less than or equal to sprite b y there is no collision
+		if (spriteA.y + spriteA.h <= spriteB.y) 
+			return false; 
+
+		return true; 
+	}
+
+	saveLinkPreviousPosition()
+	{
+		this.link.savePreviousPosition()
+	}
+
+	moveLinkModel(dir) 
+	{
+		this.link.moveLink(dir)
+	}
+
+	spawnBoomerang()
+	{	
+		//create new boomerang and push it into array
+		//spawn boomerang where link is with an offset of 20
+		let boomerang = new Boomerang(this.link.x+20, this.link.y+20, 20, 20, "images/boomerang1.png", this.link.direction)
+		this.sprites.push(boomerang)
+	}
+	
+	// this function is called upon the event of dragging/dropping the json file onto the page
+	loadMap(mapData) 
+	{
+		//clear spirte array 
+		this.sprites = [];
+
+		//create new sprite variable
+		let sprite
+
+		//add link back to sprites array
+		this.link = new Link(this.link.x, this.link.y, 50, 50, "images/link1.png");
+		this.sprites.push(this.link);
+
+		//go through each json object in mapData
+		for (let i = 0; i < mapData.sprites.length; i++) {
+			
+			//create sprite variable 
+			let s = mapData.sprites[i];
+
+			//type 0 in json is equal to tree
+			if(s.type == 0)
+				//create new tree
+				sprite = new Tree(s.x, s.y, 50, 50, "images/tree.png")
+			
+			//type 1 is equal to chest
+			if(s.type == 1)
+				//create new chest
+				sprite = new Chest(s.x, s.y, 40, 40, "images/treasurechest.png")
+			
+			//push new sprite into sprites 
+			this.sprites.push(sprite);
+		}
+		console.log("Map loaded:", mapData)
+	}
+}
+
+
+
+
+class View
+{
+	constructor(model)
+	{	
+		//model object
+		this.model = model
+
+		//javscript canvas
+		this.canvas = document.getElementById("myCanvas")
+
+		//current room variables for camera movement 
+		this.currentRoomX = 0
+		this.currentRoomY = 0
+
+		//string to display on screen for rupees
+		this.score = "Rupees Collected: "
+	}
+
+	update()
+	{	
+		//ctx = javascript canvas
+		let ctx = this.canvas.getContext("2d")
+
+		//crate rectangle
+		ctx.clearRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+
+		//dark gray background fill color
+		ctx.fillStyle = "rgb(150, 150, 150)"
+
+		//file rectangle with gray color
+		ctx.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+
+		//draw each sprite onto canvas
+		for(let i = 0; i < this.model.sprites.length; i++)
+		{
+			let sprite = this.model.sprites[i]
+			sprite.drawYourself(ctx, this.currentRoomX, this.currentRoomY)
+		}
+
+		//display string for rupees collection (white fill black outline)
+		this.score = "Rupees Collected: " + this.model.totalNumberOfRupees
+		ctx.fillStyle = "white"
+		ctx.font = "30px Comic Sans MS"
+		ctx.strokeStyle = "black";
+        ctx.lineWidth = 7; 
+		ctx.strokeText(this.score, 420, 50)
+		ctx.fillText(this.score, 420, 50)
+	}
+
+	moveCameraWithLink()
+	{
+		//if links current x is greater than the game windows width move right
+		if(this.model.link.x > WINDOW_WIDTH)
+			if(this.currentRoomX == 0)
+				this.currentRoomX += WINDOW_WIDTH
+		
+		//if links current x is less than the game windows width move left
+		if(this.model.link.x < WINDOW_WIDTH)
+			if(this.currentRoomX == WINDOW_WIDTH)
+				this.currentRoomX -= WINDOW_WIDTH
+
+		//if links current y is greater than the game windows width move down
+		if(this.model.link.y > WINDOW_HEIGHT)
+			if(this.currentRoomY == 0)
+				this.currentRoomY += WINDOW_HEIGHT
+		
+		//if links current y is less than the game windows width move up
+		if(this.model.link.y < WINDOW_HEIGHT )
+			if(this.currentRoomY == WINDOW_HEIGHT)
+				this.currentRoomY -= WINDOW_HEIGHT
+	}
+}
+
+
+
+
+
+
+
+class Controller
+{
+	constructor(model, view)
+	{
+		//mode and view objects
+		this.model = model
+		this.view = view
+
+		//keyboard input
+		this.key_right = false
+		this.key_left = false
+		this.key_up = false
+		this.key_down = false
+		this.key_space = false
+
+		//cooldown for boomerang spawning
+		this.boomerangCooldown = 5
+
+		//key listeners 
+		let self = this
+		document.addEventListener('keydown', function(event) { self.keyDown(event) }, false)
+		document.addEventListener('keyup', function(event) { self.keyUp(event) }, false)
+	}
+
+
+	keyDown(event)
+	{
+		//key press down input
+		if(event.keyCode == 39) 
+			this.key_right = true
+		else if(event.keyCode == 37) 
+			this.key_left = true
+		else if(event.keyCode == 38) 
+			this.key_up = true
+		else if(event.keyCode == 40) 
+			this.key_down = true
+		else if(event.keyCode == 32)
+			this.key_space = true
+	}
+
+	keyUp(event)
+	{
+		//key press up input
+		if(event.keyCode == 39) 
+			this.key_right = false
+		else if(event.keyCode == 37) 
+			this.key_left = false
+		else if(event.keyCode == 38) 
+			this.key_up = false
+		else if(event.keyCode == 40) 
+			this.key_down = false
+		else if(event.keyCode == 32)
+			this.key_space = false
+	}
+
+	update()
+	{
+		//move camera with link
+		this.view.moveCameraWithLink()
+
+		//have link save previous position
+		this.model.saveLinkPreviousPosition()
+
+		//move link based on keyboard input 
+		if(this.key_right) 
+			this.model.moveLinkModel("right")
+		else if(this.key_left)
+			this.model.moveLinkModel("left")
+		if(this.key_up) 
+			this.model.moveLinkModel("up")
+		else if(this.key_down) 
+			this.model.moveLinkModel("down")
+
+		//if no key is pressed have link idle
+		if(!this.key_up && !this.key_down && !this.key_right && !this.key_left)
+			this.model.link.resetFrameNum()
+
+		//if space is pressed
+		if(this.key_space)
+		{	
+			//as long as boomerang cooldown is not active 
+			if(this.boomerangCooldown >= 5)
+			{	
+				//spawn new boomerang 
+				this.model.spawnBoomerang()
+
+				//set boomerang cooldown to zero
+				this.boomerangCooldown = 0
+			}
+			else
+				//increase cooldown
+				this.boomerangCooldown++
+		}
+	}
+}
+
+
+
+
+
+class Game
+{
+	constructor()
+	{
+		this.model = new Model();
+		this.view = new View(this.model);
+		this.controller = new Controller(this.model, this.view);
+	
+		//this code will allow you to drag and drop your map instead of hardcoding it!
+		//do not change this code
+		var dropZone = document.getElementById("dropZone");
+		var self = this;
+
+		// Prevent default drag behaviors
+		["dragenter", "dragover", "dragleave", "drop"].forEach(function(eventName) {
+		  dropZone.addEventListener(eventName, function(e) { e.preventDefault(); e.stopPropagation(); });
+		});
+
+		// Highlight drop zone when dragging over
+		["dragenter", "dragover"].forEach(function(eventName) {
+		  dropZone.addEventListener(eventName, function() { dropZone.classList.add("hover"); });
+		});
+
+		["dragleave", "drop"].forEach(function(eventName) {
+		  dropZone.addEventListener(eventName, function() { dropZone.classList.remove("hover"); });
+		});
+
+		// Handle dropped files
+		dropZone.addEventListener("drop", function(e) {
+			var file = e.dataTransfer.files[0];
+			if (!file) return;
+			if (!file.name.endsWith(".json")) {
+				alert("Please drop your map JSON file here.");
+				return;
+			}
+
+			var reader = new FileReader();
+			reader.onload = function(ev) {
+				try {
+					var data = JSON.parse(ev.target.result);
+					self.model.loadMap(data);
+				} catch(err) {
+					alert("Error parsing JSON: " + err.message);
+				}
+			};
+			reader.readAsText(file);
+		});
+	}
+
+	onTimer()
+	{
+		this.controller.update();
+		this.model.update();
+		this.view.update();
+	}
+}
+
+let game = new Game()
+let timer = setInterval(function() { game.onTimer() }, 40)
+
+</script>
+
+</body>
